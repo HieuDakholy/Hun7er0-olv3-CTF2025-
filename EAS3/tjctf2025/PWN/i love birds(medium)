@@ -1,0 +1,33 @@
+##Phân tích Src
+
+Phân tích src code ta thấy tồn tại mảng buf[64] được khai báo 64byte nhưng lại dùng hàm get()  dẫn tới lỗ hổng Buffer Overflow
+Trong src có đoạn 
+void win(int secret) {
+    if (secret == 0xA1B2C3D4) {
+        system("/bin/sh");
+    }
+}
+từ đoạn trên thì mục tiêu của chúng ta là gọi được hàm win() để tạo shell /bin/sh để đọc flag trên sever.
+Trong src có đoạn 
+if (canary != 0xDEADBEEF) {
+        puts("No stack smashing for you!");
+        exit(1);
+    }
+tác giả đã tạo stackcanary trong một biến của hàm main với canary = 0xDEADBEE0xDEADBEEF.  
+Stack Canary là một giá trị đặc biệt được đặt giữa các biến cục bộ và địa chỉ trả về của hàm trong ngăn xếp (stack). Khi chương trình kết thúc hàm, trước khi trả về, nó sẽ kiểm tra xem giá trị này có bị thay đổi không. Nếu bằng giá trị canary ban đầu thì chương trình sẽ chạy đến hết, trong trường hợp canary khác với giá trị ban đầu thì chương trình sẽ dừng ngay lập tức. 
+​
+
+Với định nghĩa trên thì khi chúng qua làm tràn biến quá 64 byte làm biến đổi canary thì chương trình in ra No stack smashing for you! rồi thoát, còn nếu canary không bị thay đổi thì không in ra gì rồi thoát chương trình bình thường. Ta đã biết được giá trị của biến canary là 0xDEADBEEF.
+Để giải bài này ta muốn chương trình nhảy đến win(), và để nhảy đến được win() ta phải vượt qua canary check:
+Ghi đè toàn bộ byte của buf
+Ghi đè đúng 4 byte của biến unsigned int canary với giá trị 0xDEADBEEF
+Ghi đè 8 byte của RBP 
+Ghi đè 8 byte của RIP 
+​
+Sau khi quan sát hàm win()
+void win(int secret) {
+    if (secret == 0xA1B2C3D4) {
+        system("/bin/sh");
+    }
+}
+Biến secret phải có giá trị bằng 0xA1B2C3D4 thì mới chạy được hàm nhưng lại không  có cách nào để truyền tham số 0xA1B2C3D4 vào biến secret. Chúng ta có thể nhảy trực tiếp vào địa chỉ tạo shell trong file binary.
